@@ -5,6 +5,7 @@ import sys
 import string
 from relocations import get_relocations
 import os
+import argparse
 
 HEADER="""\
 #define _GNU_SOURCE
@@ -95,30 +96,40 @@ def write_c_file(func_protos):
     libpreload_fd.close()
 
 if __name__ == '__main__':
-    bin_name = sys.argv[1]
+    parser = argparse.ArgumentParser(description='Create a stub for an LD_PRELOADable library.')
+    parser.add_argument('-b', '--binary', help='binary to scan for symbols')
+    parser.add_argument('function_names', metavar='function_name', nargs='*', help='function to create a stub for')
+    args = parser.parse_args()
 
-    ci.Config.set_library_file("/usr/lib/llvm-3.4/lib/libclang.so")
+    if not (args.function_names or args.binary):
+        parser.error('Nothing to do, add either function names or a binary to scan')
 
+    function_names = args.function_names or []
+    function_names = set(function_names)
 
-    rels = get_relocations(bin_name)
-    assert(type(rels) == type(set()))
+    if args.binary:
+        rels = get_relocations(args.binary)
+        assert(type(rels) == type(set()))
+        function_names = function_names.union(rels)
 
     func_protos = []
 
+    ci.Config.set_library_file("/usr/lib/llvm-3.4/lib/libclang.so")
+
     for root, dirs, files in os.walk('/usr/include'):
-        if rels == set():
+        if function_names == set():
             break
         for header in files:
-            if header[-2:] != '.h':
+            if len(header) < 3 or header[-2:] != '.h':
                 continue
             index = ci.Index.create()
             header = os.path.join(root, header)
             tu = index.parse(header)
 
             for func_proto in iterate_func_protos(tu.cursor):
-                if func_proto.name in rels:
+                if func_proto.name in function_names:
                     func_protos.append(func_proto)
-                    rels.remove(func_proto.name)
+                    function_names.remove(func_proto.name)
     
     write_c_file(func_protos)
 
