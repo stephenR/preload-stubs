@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# based on readelf.py from
+# Eli Bendersky (eliben@gmail.com)
+# This code is in the public domain
 
 from elftools.elf.elffile import ELFFile
 from elftools.elf.relocation import RelocationSection
