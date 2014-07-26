@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 
-import clang.cindex as ci
-import sys
-import string
 from relocations import get_relocations
 import os
 import argparse
+import pickle
 
 HEADER="""\
 #define _GNU_SOURCE
@@ -13,62 +11,12 @@ HEADER="""\
 
 """
 
-class Arg(object):
-    def __init__(self, type, name):
-        self.type = type
-        self.name = name
-    def get_name(self, off):
-        if self.name == '':
-            return 'arg_' + str(off)
-        else:
-            return self.name
-    def declaration(self, off):
-        name = self.get_name(off)
-        return self.type + ' ' + name
-
-class FuncProto(object):
-    def __init__(self, name, ret_type, arg_types):
-        self.name = name
-        self.ret_type = ret_type
-        self.arg_types = arg_types
-
-    def __str__(self):
-        ret = self.ret_type + ' ' + self.name + '('
-        ret += ', '.join(type.declaration(i) for i,type in enumerate(self.arg_types))
-        ret += ')'
-        return ret
-
-    def as_func_ptr(self, name):
-        ret = self.ret_type + ' (*' + name + ')('
-        ret += ', '.join(type.declaration(i) for i,type in enumerate(self.arg_types))
-        ret += ')'
-        return ret
-    def get_arg_names(self):
-        ret = []
-        for i, arg in enumerate(self.arg_types):
-            ret.append(arg.get_name(i))
-        return ret
-
-def iterate_func_protos(node):
-    if node.kind.is_declaration() and node.kind.name == "FUNCTION_DECL":
-        name = node.spelling
-        ret_type = node.type.get_result().spelling
-        args = []
-        for arg in node.get_children():
-            if arg.type.kind == ci.TypeKind.INVALID:
-                continue
-            if arg.type.kind == ci.TypeKind.TYPEDEF:
-                if arg.type.spelling == arg.spelling:
-                    continue
-            args.append(Arg(arg.type.spelling, arg.spelling))
-        yield FuncProto(name, ret_type, args)
-    for c in node.get_children():
-        for func_proto in iterate_func_protos(c):
-            yield func_proto
-
-def get_stub(func_proto):
+def get_stub(func_proto, comment=False):
+    ret = ''
     body = ''
+
     fp_name = 'orig_' + func_proto.name
+
     body += func_proto.as_func_ptr(fp_name) + ';\n'
     body += fp_name + ' = dlsym(RTLD_NEXT, "' + func_proto.name + '");\n'
     body += 'return (*' + fp_name + ')(' + ', '.join(func_proto.get_arg_names()) + ');'
@@ -76,33 +24,45 @@ def get_stub(func_proto):
     #indent the body
     body = '\n'.join(map(lambda l: '  ' + l, body.split('\n')))
 
-    ret = str(func_proto) + '{\n'
+    ret += '#include <' + func_proto.header_file + '>\n'
+    ret += str(func_proto) + '{\n'
     ret += body
     ret += '\n}'
 
-    #comment out everything
-    ret = '\n'.join(map(lambda l: '//' + l, ret.split('\n')))
+    if comment:
+        ret = '\n'.join(map(lambda l: '//' + l, ret.split('\n')))
+
     ret += '\n\n'
 
     return ret
 
-def write_c_file(func_protos):
+def write_c_file(func_protos, comment):
     libpreload_fd = open('libpreload.c', 'w')
 
     libpreload_fd.write(HEADER)
     for func_proto in func_protos:
-        libpreload_fd.write(get_stub(func_proto))
+        libpreload_fd.write(get_stub(func_proto, comment))
 
     libpreload_fd.close()
 
 if __name__ == '__main__':
+    script_path = os.path.dirname(os.path.abspath(__file__))
     parser = argparse.ArgumentParser(description='Create a stub for an LD_PRELOADable library.')
     parser.add_argument('-b', '--binary', help='binary to scan for symbols')
+    parser.add_argument('-d', '--declarations', help='declarations file as created by parse_headers.py', default=script_path + '/declarations.p')
+    parser.add_argument('-c', '--comment', help='comment out the created function stubs', action='store_true')
     parser.add_argument('function_names', metavar='function_name', nargs='*', help='function to create a stub for')
     args = parser.parse_args()
 
     if not (args.function_names or args.binary):
         parser.error('Nothing to do, add either function names or a binary to scan')
+
+    try:
+        pickled_declarations = open(args.declarations, 'r')
+    except:
+        parser.error('Error opening the declarations file. Did you run parse_headers.py?')
+
+    declarations = pickle.load(pickled_declarations)
 
     function_names = args.function_names or []
     function_names = set(function_names)
@@ -114,22 +74,12 @@ if __name__ == '__main__':
 
     func_protos = []
 
-    ci.Config.set_library_file("/usr/lib/llvm-3.4/lib/libclang.so")
+    for function_name in function_names:
+        declaration = declarations.get(function_name)
+        if not declaration or declaration == []:
+            print 'No declaration found for {}'.format(function_name)
+            continue
+        func_protos.append(declaration[0])
 
-    for root, dirs, files in os.walk('/usr/include'):
-        if function_names == set():
-            break
-        for header in files:
-            if len(header) < 3 or header[-2:] != '.h':
-                continue
-            index = ci.Index.create()
-            header = os.path.join(root, header)
-            tu = index.parse(header)
-
-            for func_proto in iterate_func_protos(tu.cursor):
-                if func_proto.name in function_names:
-                    func_protos.append(func_proto)
-                    function_names.remove(func_proto.name)
-    
-    write_c_file(func_protos)
+    write_c_file(func_protos, args.comment)
 
