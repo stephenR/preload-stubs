@@ -64,19 +64,6 @@ class DeclarationParser(object):
             if not arg_name or arg_name == '':
                 arg_name = 'arg' + str(i)
             args.append(Arg(arg.type.spelling, arg_name))
-        #print node.get_arguments()
-        #for i, arg in enumerate(node.get_children()):
-        #    if arg.type.kind == ci.TypeKind.INVALID:
-        #        continue
-
-        #    if arg.type.kind == ci.TypeKind.TYPEDEF:
-        #        if arg.type.spelling == arg.spelling:
-        #            continue
-
-        #    arg_name = arg.spelling
-        #    if not arg_name or arg_name == '':
-        #        arg_name = 'arg' + str(i)
-        #    args.append(Arg(arg.type.spelling, arg_name))
 
         return FunctionDeclaration(self.headers, name, ret_type, args)
 
@@ -92,8 +79,6 @@ class DeclarationParserFactory(object):
         os.close(fd)
         dp = DeclarationParser(tempname, headers=headers)
         dp.tmp_file = tempname
-        #decl_cursor = next(self._declarations())
-        #ret_val = self._parse_cursor(decl_cursor)
         return dp
     @staticmethod
     def file_parser(filename, directory):
