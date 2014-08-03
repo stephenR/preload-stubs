@@ -5,6 +5,8 @@ import pickle
 from man_parser import ManParser
 from declaration_parser import DeclarationParserFactory
 
+HEADER_BLACKlIST = ['dlg_keys.h', 'dlg_colors.h', 'dlg_config.h', 'dialog.h']
+
 class DeclarationMap(object):
     def __init__(self):
         self.declarations = {}
@@ -24,6 +26,8 @@ class DeclarationMap(object):
         for root, dirs, files in os.walk(dirname):
             for header in files:
                 if len(header) < 3 or header[-2:] != '.h':
+                    continue
+                if header in HEADER_BLACKlIST:
                     continue
                 rel_path = root[len(dirname)+1:]
                 self.add_file(os.path.join(rel_path, header), dirname)
