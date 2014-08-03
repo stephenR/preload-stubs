@@ -42,10 +42,9 @@ class DeclarationParser(object):
                 self._skip = True
             if node.spelling == NO_SKIP:
                 self._skip = False
-        if not self._skip and node.kind.is_declaration() and node.kind.name == "FUNCTION_DECL":
+        if not self._skip and node.kind.is_declaration() and node.type.kind == ci.TypeKind.FUNCTIONPROTO:
             yield self._parse_declaration(node)
         else:
-            #print dir(node.get_arguments())
             for c in node.get_children():
                 for declaration in self._declarations(c):
                     yield declaration
@@ -57,6 +56,7 @@ class DeclarationParser(object):
     def _parse_declaration(self, node):
         name = node.spelling
         ret_type = node.type.get_result().spelling
+        variadic = node.type.is_function_variadic()
 
         args = []
         for i, arg in enumerate(node.get_arguments()):
@@ -65,12 +65,13 @@ class DeclarationParser(object):
                 arg_name = 'arg' + str(i)
             args.append(Arg(arg.type.spelling, arg_name))
 
-        return FunctionDeclaration(self.headers, name, ret_type, args)
+        return FunctionDeclaration(self.headers, name, ret_type, args, variadic)
 
 class DeclarationParserFactory(object):
     @staticmethod
     def string_parser(string, headers=[]):
-        body = '#define {}\n'.format(SKIP)
+        body = '#define _GNU_SOURCE\n'
+        body += '#define {}\n'.format(SKIP)
         body += '\n'.join('#include <{}>'.format(header) for header in headers)
         body += '\n#define {}\n'.format(NO_SKIP)
         body += string + ';\n'

@@ -2,7 +2,7 @@
 
 import os
 import pickle
-from man_parser import ManParser
+from man_parser import ManParser, ManParserException
 from declaration_parser import DeclarationParserFactory
 
 HEADER_BLACKlIST = ['dlg_keys.h', 'dlg_colors.h', 'dlg_config.h', 'dialog.h']
@@ -18,8 +18,11 @@ class DeclarationMap(object):
                 continue
             try:
                 declaration = ManParser(declaration.name).declaration()
-            except:
+            except ManParserException:
                 pass
+
+            if declaration.variadic:
+                continue
             self.declarations[declaration.name] = declaration
 
     def add_directory(self, dirname):

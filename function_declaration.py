@@ -18,11 +18,12 @@ class Arg(object):
         return not (self == other)
 
 class FunctionDeclaration(object):
-    def __init__(self, header_files, name, ret_type, arg_types):
+    def __init__(self, header_files, name, ret_type, arg_types, variadic):
         self.header_files = header_files
         self.name = name
         self.ret_type = ret_type
         self.arg_types = arg_types
+        self.variadic = variadic
 
     def __str__(self):
         ret = self.ret_type + ' ' + self.name + '('

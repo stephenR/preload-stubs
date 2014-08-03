@@ -6,6 +6,12 @@ import re
 import string
 from declaration_parser import DeclarationParserFactory
 
+BLACKLIST = ['open', 'openat', 'strerror_r', 'getpgrp', 'setpgrp', 'reboot', 'bdflush']
+
+class ManParserException(Exception):
+    def __init__(self, msg):
+        super(ManParserException, self).__init__(msg)
+
 class ManParser(object):
     def __init__(self, name):
         self._header_files = None
@@ -13,10 +19,15 @@ class ManParser(object):
         self.synopsis = []
         in_synopsis = False
         continue_line = None
-        try:
-            fd = gzip.open(MAN_PATH + '/man3/' + name + '.3.gz', 'r')
-        except:
-            fd = gzip.open(MAN_PATH + '/man2/' + name + '.2.gz', 'r')
+        fd = None
+        for i in [3,2]:
+            try:
+                fd = gzip.open(MAN_PATH + '/man{}/'.format(i) + name + '.{}.gz'.format(i), 'r')
+                break
+            except:
+                pass
+        if not fd:
+            raise ManParserException('No man page found for {}.'.format(name))
         for line in fd:
             if continue_line != None:
                 line = continue_line + line
@@ -35,6 +46,7 @@ class ManParser(object):
             without_formatting = self._remove_formatting(line[:-1])
             if without_formatting:
                 self.synopsis.append(without_formatting)
+
     def _remove_formatting(self, line):
         if not line.startswith('.'):
             return line
@@ -74,6 +86,8 @@ class ManParser(object):
         return self._header_files
 
     def declaration(self):
+        declarations = []
+
         for line in self.synopsis:
             match = re.search('^.*[^\w]{} *\\(.*\\);'.format(self.name), line)
 
@@ -83,10 +97,18 @@ class ManParser(object):
             parser =  DeclarationParserFactory.string_parser(match.group(0), headers=self.header_files())
             for declaration in parser.declarations():
                 if declaration.name == self.name:
-                    return declaration
-            assert(False)
+                    declarations.append(declaration)
+                    break
+
         #we opened a man file with the correct name, we should find the declaration
-        assert(False)
+        #assert(len(declarations) >= 1)
+        #TODO turn this into an assertion
+        if len(declarations) < 1:
+            raise ManParserException("[BUG] Error parsing the man page.")
+        #if len(declarations) > 1:
+        #    print 'multiple declarations: {}'.format(self.name)
+
+        return declarations[0]
 
 if __name__ == '__main__':
     import sys
