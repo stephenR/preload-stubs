@@ -18,8 +18,8 @@ class Arg(object):
         return not (self == other)
 
 class FunctionDeclaration(object):
-    def __init__(self, header_file, name, ret_type, arg_types):
-        self.header_file = header_file
+    def __init__(self, header_files, name, ret_type, arg_types):
+        self.header_files = header_files
         self.name = name
         self.ret_type = ret_type
         self.arg_types = arg_types
@@ -54,5 +54,3 @@ class FunctionDeclaration(object):
 
     def __ne__(self, other):
         return not (self == other)
-
-
