@@ -24,7 +24,8 @@ def get_stub(func_proto, comment=False):
     #indent the body
     body = '\n'.join(map(lambda l: '  ' + l, body.split('\n')))
 
-    ret += '#include <' + func_proto.header_file + '>\n'
+    for header_file in func_proto.header_files:
+        ret += '#include <' + header_file + '>\n'
     ret += str(func_proto) + '{\n'
     ret += body
     ret += '\n}'
@@ -49,7 +50,7 @@ if __name__ == '__main__':
     script_path = os.path.dirname(os.path.abspath(__file__))
     parser = argparse.ArgumentParser(description='Create a stub for an LD_PRELOADable library.')
     parser.add_argument('-b', '--binary', help='binary to scan for symbols')
-    parser.add_argument('-d', '--declarations', help='declarations file as created by parse_headers.py', default=script_path + '/declarations.p')
+    parser.add_argument('-d', '--declarations', help='declarations file as created by parse.py', default=script_path + '/declarations.p')
     parser.add_argument('-c', '--comment', help='comment out the created function stubs', action='store_true')
     parser.add_argument('function_names', metavar='function_name', nargs='*', help='function to create a stub for')
     args = parser.parse_args()
@@ -60,7 +61,7 @@ if __name__ == '__main__':
     try:
         pickled_declarations = open(args.declarations, 'r')
     except:
-        parser.error('Error opening the declarations file. Did you run parse_headers.py?')
+        parser.error('Error opening the declarations file. Did you run parse.py?')
 
     declarations = pickle.load(pickled_declarations)
 
@@ -75,11 +76,10 @@ if __name__ == '__main__':
     func_protos = []
 
     for function_name in function_names:
-        declaration = declarations.get(function_name)
-        if not declaration or declaration == []:
+        try:
+            func_protos.append(declarations[function_name])
+        except:
             print 'No declaration found for {}'.format(function_name)
-            continue
-        func_protos.append(declaration[0])
 
     write_c_file(func_protos, args.comment)
 
